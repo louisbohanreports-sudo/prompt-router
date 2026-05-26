@@ -1,0 +1,29 @@
+{
+  "name": "promptrouter",
+  "version": "0.1.0",
+  "description": "Intelligent LLM routing proxy — one API key, always the right model",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "test": "tsx scripts/test-router.ts"
+  },
+  "dependencies": {
+    "@adversa/secureclaw": "^2.2.0",
+    "@anthropic-ai/sdk": "^0.30.0",
+    "express": "^4.18.2",
+    "express-rate-limit": "^8.5.2",
+    "openai": "^4.52.0",
+    "uuid": "^14.0.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.0.0",
+    "tsx": "^4.15.0",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

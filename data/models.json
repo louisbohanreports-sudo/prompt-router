@@ -1,0 +1,324 @@
+{
+  "_meta": {
+    "version": "1.0.0",
+    "updated": "2026-05-25",
+    "note": "Pricing in USD per 1M tokens. Fallback order is lower = preferred."
+  },
+  "models": [
+    {
+      "id": "deepseek/deepseek-chat",
+      "display_name": "DeepSeek Chat",
+      "provider": "deepseek",
+      "provider_model_id": "deepseek-chat",
+      "pricing": {
+        "input_per_1m": 0.27,
+        "output_per_1m": 1.10,
+        "currency": "USD"
+      },
+      "context_window": 64000,
+      "max_output_tokens": 8192,
+      "capabilities": {
+        "text": true,
+        "code": true,
+        "vision": false,
+        "function_calling": true,
+        "streaming": true,
+        "json_mode": true
+      },
+      "strengths": [
+        "Extremely cost-effective",
+        "Fast inference",
+        "Good at structured output and JSON extraction",
+        "Solid code understanding and generation",
+        "Conversational, good at following instructions"
+      ],
+      "weaknesses": [
+        "No vision/image input",
+        "Weaker at nuanced creative writing vs Claude",
+        "Occasional hallucinations on obscure knowledge",
+        "Not as strong as Claude for complex reasoning chains"
+      ],
+      "ideal_intents": ["chat", "summary", "research", "structured"],
+      "fallback_order": 1,
+      "availability_url": "https://status.deepseek.com",
+      "latency_profile": {
+        "p50_ms": 800,
+        "p95_ms": 2400
+      },
+      "notes": "Best cost-per-token for general use. Default route for chat/summary/research."
+    },
+    {
+      "id": "deepseek/deepseek-reasoner",
+      "display_name": "DeepSeek R1",
+      "provider": "deepseek",
+      "provider_model_id": "deepseek-reasoner",
+      "pricing": {
+        "input_per_1m": 0.55,
+        "output_per_1m": 2.19,
+        "currency": "USD"
+      },
+      "context_window": 64000,
+      "max_output_tokens": 8000,
+      "capabilities": {
+        "text": true,
+        "code": true,
+        "vision": false,
+        "function_calling": false,
+        "streaming": true,
+        "json_mode": false
+      },
+      "strengths": [
+        "Best-in-class math and reasoning (chain-of-thought)",
+        "Strong logical deduction",
+        "Competitive with o1 on benchmarks at fraction of cost",
+        "Good code for algorithmic problems"
+      ],
+      "weaknesses": [
+        "Slow (chain-of-thought generates many tokens)",
+        "Higher cost than deepseek-chat",
+        "No function calling",
+        "Verbose — often over-explains"
+      ],
+      "ideal_intents": ["math", "research", "code"],
+      "fallback_order": 2,
+      "latency_profile": {
+        "p50_ms": 3000,
+        "p95_ms": 8000
+      },
+      "notes": "Use for math problems, logic puzzles, and complex multi-step reasoning. Slow but thorough."
+    },
+    {
+      "id": "anthropic/claude-haiku-3-5",
+      "display_name": "Claude Haiku 3.5",
+      "provider": "anthropic",
+      "provider_model_id": "claude-haiku-3-5-20241022",
+      "pricing": {
+        "input_per_1m": 0.80,
+        "output_per_1m": 4.00,
+        "currency": "USD"
+      },
+      "context_window": 200000,
+      "max_output_tokens": 8192,
+      "capabilities": {
+        "text": true,
+        "code": true,
+        "vision": true,
+        "function_calling": true,
+        "streaming": true,
+        "json_mode": true
+      },
+      "strengths": [
+        "Very fast — lowest latency of Claude family",
+        "200K context window",
+        "Excellent at structured output and extraction",
+        "Good instruction following",
+        "Vision support",
+        "Reliable JSON mode"
+      ],
+      "weaknesses": [
+        "Weaker than Sonnet/Opus at complex reasoning",
+        "More expensive than DeepSeek for equivalent tasks",
+        "Less creative than larger models"
+      ],
+      "ideal_intents": ["chat", "structured", "summary"],
+      "fallback_order": 2,
+      "latency_profile": {
+        "p50_ms": 600,
+        "p95_ms": 1800
+      },
+      "notes": "Fastest Anthropic model. Best for structured extraction, classification, and quick chat."
+    },
+    {
+      "id": "anthropic/claude-sonnet-4-5",
+      "display_name": "Claude Sonnet 4.5",
+      "provider": "anthropic",
+      "provider_model_id": "claude-sonnet-4-5-20251022",
+      "pricing": {
+        "input_per_1m": 3.00,
+        "output_per_1m": 15.00,
+        "currency": "USD"
+      },
+      "context_window": 200000,
+      "max_output_tokens": 8192,
+      "capabilities": {
+        "text": true,
+        "code": true,
+        "vision": true,
+        "function_calling": true,
+        "streaming": true,
+        "json_mode": true
+      },
+      "strengths": [
+        "Best-in-class code generation and review",
+        "Excellent multi-step reasoning",
+        "Superior creative writing",
+        "200K context for long documents",
+        "Strong at complex instructions",
+        "Best model for architecture and system design discussions"
+      ],
+      "weaknesses": [
+        "Most expensive in this registry",
+        "Slower than Haiku",
+        "Overkill for simple chat/summary tasks"
+      ],
+      "ideal_intents": ["code", "creative", "research"],
+      "fallback_order": 3,
+      "latency_profile": {
+        "p50_ms": 1200,
+        "p95_ms": 3500
+      },
+      "notes": "Primary route for code, creative, and complex reasoning. High quality at higher cost."
+    },
+    {
+      "id": "anthropic/claude-opus-4",
+      "display_name": "Claude Opus 4",
+      "provider": "anthropic",
+      "provider_model_id": "claude-opus-4-20251101",
+      "pricing": {
+        "input_per_1m": 15.00,
+        "output_per_1m": 75.00,
+        "currency": "USD"
+      },
+      "context_window": 200000,
+      "max_output_tokens": 8192,
+      "capabilities": {
+        "text": true,
+        "code": true,
+        "vision": true,
+        "function_calling": true,
+        "streaming": true,
+        "json_mode": true
+      },
+      "strengths": [
+        "Highest capability available",
+        "Best for extremely complex reasoning",
+        "Best creative writing quality",
+        "Best for long-horizon planning tasks"
+      ],
+      "weaknesses": [
+        "Very expensive — 5x Sonnet cost",
+        "Significantly slower",
+        "Rarely worth it over Sonnet for most tasks"
+      ],
+      "ideal_intents": ["creative", "research"],
+      "fallback_order": 99,
+      "latency_profile": {
+        "p50_ms": 3000,
+        "p95_ms": 8000
+      },
+      "notes": "Reserved for explicit user request or tasks requiring maximum quality. Not in default fallback chain."
+    },
+    {
+      "id": "openai/gpt-4o",
+      "display_name": "GPT-4o",
+      "provider": "openai",
+      "provider_model_id": "gpt-4o",
+      "pricing": {
+        "input_per_1m": 2.50,
+        "output_per_1m": 10.00,
+        "currency": "USD"
+      },
+      "context_window": 128000,
+      "max_output_tokens": 16384,
+      "capabilities": {
+        "text": true,
+        "code": true,
+        "vision": true,
+        "function_calling": true,
+        "streaming": true,
+        "json_mode": true
+      },
+      "strengths": [
+        "Excellent vision/image understanding",
+        "Strong at research and knowledge tasks",
+        "Reliable function calling",
+        "Good at structured data extraction",
+        "Broad general knowledge"
+      ],
+      "weaknesses": [
+        "Not as strong as Claude for code",
+        "More expensive than DeepSeek for equivalent general tasks",
+        "OpenAI rate limits can be aggressive"
+      ],
+      "ideal_intents": ["vision", "research", "structured"],
+      "fallback_order": 3,
+      "latency_profile": {
+        "p50_ms": 1600,
+        "p95_ms": 4000
+      },
+      "notes": "Primary route for vision tasks. Good general fallback when DeepSeek unavailable."
+    },
+    {
+      "id": "openai/gpt-4o-mini",
+      "display_name": "GPT-4o Mini",
+      "provider": "openai",
+      "provider_model_id": "gpt-4o-mini",
+      "pricing": {
+        "input_per_1m": 0.15,
+        "output_per_1m": 0.60,
+        "currency": "USD"
+      },
+      "context_window": 128000,
+      "max_output_tokens": 16384,
+      "capabilities": {
+        "text": true,
+        "code": true,
+        "vision": true,
+        "function_calling": true,
+        "streaming": true,
+        "json_mode": true
+      },
+      "strengths": [
+        "Very cheap",
+        "Fastest OpenAI model",
+        "Supports vision",
+        "Good function calling reliability"
+      ],
+      "weaknesses": [
+        "Weaker reasoning than GPT-4o",
+        "More hallucinations than full GPT-4o"
+      ],
+      "ideal_intents": ["chat", "structured", "summary"],
+      "fallback_order": 2,
+      "latency_profile": {
+        "p50_ms": 400,
+        "p95_ms": 1200
+      },
+      "notes": "Cheap OpenAI option. Good fallback when DeepSeek unavailable for chat/summary."
+    }
+  ],
+  "intent_routing": {
+    "chat": {
+      "primary": "deepseek/deepseek-chat",
+      "fallback_chain": ["openai/gpt-4o-mini", "anthropic/claude-haiku-3-5", "openai/gpt-4o"]
+    },
+    "code": {
+      "primary": "anthropic/claude-sonnet-4-5",
+      "fallback_chain": ["openai/gpt-4o", "deepseek/deepseek-chat"]
+    },
+    "summary": {
+      "primary": "deepseek/deepseek-chat",
+      "fallback_chain": ["openai/gpt-4o-mini", "anthropic/claude-haiku-3-5"]
+    },
+    "research": {
+      "primary": "deepseek/deepseek-chat",
+      "fallback_chain": ["openai/gpt-4o", "anthropic/claude-sonnet-4-5"]
+    },
+    "creative": {
+      "primary": "anthropic/claude-sonnet-4-5",
+      "fallback_chain": ["openai/gpt-4o", "deepseek/deepseek-chat"]
+    },
+    "math": {
+      "primary": "deepseek/deepseek-reasoner",
+      "fallback_chain": ["openai/gpt-4o", "anthropic/claude-sonnet-4-5"]
+    },
+    "vision": {
+      "primary": "openai/gpt-4o",
+      "fallback_chain": ["anthropic/claude-sonnet-4-5", "anthropic/claude-haiku-3-5"]
+    },
+    "structured": {
+      "primary": "anthropic/claude-haiku-3-5",
+      "fallback_chain": ["openai/gpt-4o-mini", "deepseek/deepseek-chat"]
+    }
+  }
+}
