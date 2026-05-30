@@ -1,0 +1,182 @@
+# PromptRouter Soul Profile
+# ──────────────────────────────────────────────────────────────────────────────
+# This file defines YOUR routing priorities. The router respects these on every
+# single request — not just cost and speed, but your values.
+#
+# Copy this file to soul.yaml and customize it. The router loads it at startup.
+# Changes take effect on restart (or live-reload if watch mode is enabled).
+# ──────────────────────────────────────────────────────────────────────────────
+
+version: "1.0"
+
+# ── Identity ──────────────────────────────────────────────────────────────────
+# Optional. Used in audit logs and analytics to identify this profile.
+profile:
+  name: "My Routing Profile"
+  owner: ""
+  description: "Balanced cost and quality with privacy preference"
+
+# ── Priorities ────────────────────────────────────────────────────────────────
+# Rank what matters most to you. The router adjusts model scoring accordingly.
+# Values: critical | high | medium | low | off
+priorities:
+  cost: high            # Minimize token spend where quality allows
+  speed: medium         # Prefer faster models when quality is equal
+  quality: medium       # Don't sacrifice correctness for cheapness
+  privacy: high         # Prefer providers with stricter data policies
+  ethics: medium        # Prefer providers with published ethics frameworks
+
+# ── Budget ────────────────────────────────────────────────────────────────────
+# Hard limits. Requests exceeding these are blocked or downgraded.
+budget:
+  max_cost_per_request: 0.05    # USD — block/downgrade if estimated cost exceeds this
+  max_cost_per_day: 5.00        # USD — daily cap across all requests
+  alert_threshold: 0.80         # Alert when 80% of daily budget is used
+  downgrade_on_exceed: true     # If true, route to cheaper model instead of blocking
+
+# ── Provider Preferences ──────────────────────────────────────────────────────
+providers:
+  # Providers you explicitly prefer (boosted in scoring)
+  preferred:
+    - anthropic
+    - deepseek
+
+  # Providers you want to avoid (penalized in scoring, used only as last resort)
+  deprioritized: []
+
+  # Providers that are completely blocked (never used, even as fallback)
+  forbidden: []
+  # Example: forbidden: [openai]  # Don't send any prompts to OpenAI
+
+# ── Model Preferences ─────────────────────────────────────────────────────────
+models:
+  # Models explicitly preferred for specific intents
+  # Overrides the default intent routing table
+  prefer_for:
+    code: ""           # e.g. "anthropic/claude-sonnet-4-5"
+    creative: ""       # e.g. "anthropic/claude-opus-4"
+    math: ""           # e.g. "deepseek/deepseek-reasoner"
+    research: ""
+    summary: ""
+    structured: ""
+    chat: ""
+    vision: ""
+
+  # Models never to use, for any intent
+  forbidden: []
+  # Example: forbidden: ["anthropic/claude-opus-4"]  # Too expensive
+
+  # Maximum model tier by default (prevents accidental expensive model use)
+  # Options: economy | standard | premium | unrestricted
+  max_tier: standard
+
+# ── Quality Floor ─────────────────────────────────────────────────────────────
+# Minimum quality standards. Router won't select a model below these thresholds.
+quality:
+  # Minimum context window required (tokens)
+  min_context_window: 8000
+
+  # Require vision capability for vision intents
+  require_vision_for_vision: true
+
+  # Require function calling capability for structured intents
+  require_function_calling_for_structured: true
+
+  # Refuse to use models with known hallucination issues for high-stakes intents
+  # Intents where quality matters most
+  high_stakes_intents:
+    - code
+    - math
+    - structured
+
+# ── Privacy Policy ────────────────────────────────────────────────────────────
+# Controls which providers can see your prompts based on data policies.
+privacy:
+  # Provider data retention policies (informational — affects ethics scoring)
+  # Options: strict | standard | permissive
+  required_data_policy: standard
+
+  # Never send prompts containing these patterns to external providers
+  # (Blocks the request with an error rather than risking data leakage)
+  block_if_prompt_contains:
+    - "\\bSSN\\b"
+    - "\\bsocial security\\b"
+    - "\\bpassword\\b"
+    - "credit card"
+
+  # Scrub these patterns from prompts before sending (replaces with [REDACTED])
+  redact_patterns:
+    - "\\b\\d{3}-\\d{2}-\\d{4}\\b"    # SSN pattern
+    - "\\b4[0-9]{15}\\b"               # Visa card number
+
+# ── Ethics ────────────────────────────────────────────────────────────────────
+# Provider ethics preferences. Affects scoring when priority.ethics is set.
+ethics:
+  # Prefer providers with published responsible AI frameworks
+  prefer_published_ai_policy: true
+
+  # Prefer providers with third-party safety audits
+  prefer_audited_providers: true
+
+  # Avoid providers with known data-selling practices
+  avoid_data_selling_providers: true
+
+  # Jurisdiction preferences for data residency
+  # Options: us | eu | any
+  preferred_data_jurisdiction: us
+
+# ── Routing Overrides ─────────────────────────────────────────────────────────
+# Direct overrides that bypass intent classification for specific patterns.
+# Checked before intent classification — first match wins.
+overrides:
+  - name: "Always use DeepSeek for quick questions"
+    condition:
+      prompt_max_length: 100    # Short prompts
+      intents: [chat]
+    route_to: "deepseek/deepseek-chat"
+
+  - name: "Use best model for production code"
+    condition:
+      prompt_contains: ["production", "deploy", "critical", "security"]
+      intents: [code]
+    route_to: "anthropic/claude-sonnet-4-5"
+
+  # Add your own overrides here
+
+# ── Fallback Behavior ─────────────────────────────────────────────────────────
+fallback:
+  # How many times to retry with next model in chain before giving up
+  max_retries: 3
+
+  # How long to wait before retrying a failed provider (seconds)
+  retry_delay_seconds: 2
+
+  # If all models fail, return this error or attempt a last-resort model
+  # Options: error | last_resort
+  on_total_failure: error
+
+  # Model to use as absolute last resort (if on_total_failure = last_resort)
+  last_resort_model: "deepseek/deepseek-chat"
+
+# ── Caching ───────────────────────────────────────────────────────────────────
+cache:
+  enabled: true
+  ttl_seconds: 3600          # Cache duration (1 hour default)
+  max_entries: 1000
+  # Don't cache these intents (results likely need to be fresh)
+  skip_for_intents:
+    - vision                 # Images change
+
+# ── Audit & Observability ─────────────────────────────────────────────────────
+audit:
+  # Log every routing decision with full breakdown
+  log_routing_decisions: true
+
+  # Include cost estimates in logs
+  log_costs: true
+
+  # Include intent scores in logs
+  log_intent_scores: true
+
+  # Log file path (relative to project root)
+  log_file: "logs/routing-audit.jsonl"

@@ -8,6 +8,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import { loadSoul, applySoul, type SoulProfile } from './soul';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -36,6 +37,8 @@ export interface RouterOptions {
   preferSpeed?: boolean;
   modelsAllowed?: string[];
   modelsBlocked?: string[];
+  soul?: SoulProfile;        // Optional — if not provided, loads from soul.yaml
+  soulPath?: string;         // Custom path to soul.yaml
 }
 
 export interface ModelEntry {
@@ -264,6 +267,7 @@ function scoreModel(
   model: ModelEntry,
   intent: Intent,
   opts: RouterOptions,
+  soulModifiers?: Record<string, number>,
 ): number {
   // Skip unavailable providers
   if (!isProviderHealthy(model.provider)) return -Infinity;
@@ -271,6 +275,9 @@ function scoreModel(
   // Apply allow/block lists
   if (opts.modelsAllowed && !opts.modelsAllowed.includes(model.id)) return -Infinity;
   if (opts.modelsBlocked && opts.modelsBlocked.includes(model.id)) return -Infinity;
+
+  // Soul: forbidden providers/models → hard block
+  if (soulModifiers && soulModifiers[model.provider] === -Infinity) return -Infinity;
 
   let score = 0;
 
@@ -287,8 +294,12 @@ function scoreModel(
   score += opts.preferSpeed ? speedScore * 2 : speedScore;
 
   // Fallback order preference (lower order = preferred primary)
-  // Strong penalty — registry order is the curated human decision
   score -= model.fallback_order * 8;
+
+  // Soul modifiers — add provider preference adjustments
+  if (soulModifiers && soulModifiers[model.provider] !== undefined) {
+    score += soulModifiers[model.provider];
+  }
 
   return score;
 }
@@ -303,6 +314,7 @@ export function buildCacheKey(messages: Message[], model: string, temperature: n
 export function selectModel(
   intent: Intent,
   opts: RouterOptions = {},
+  soulModifiers?: Record<string, number>,
 ): { model: ModelEntry; fallbackChain: string[] } {
   const registry = loadRegistry();
   const routing = registry.intent_routing[intent] ?? registry.intent_routing['chat'];
@@ -313,9 +325,9 @@ export function selectModel(
     .map(id => registry.models.find(m => m.id === id))
     .filter(Boolean) as ModelEntry[];
 
-  // Score and sort
+  // Score and sort — pass soul modifiers into scoring
   const scored = candidates
-    .map(m => ({ model: m, score: scoreModel(m, intent, opts) }))
+    .map(m => ({ model: m, score: scoreModel(m, intent, opts, soulModifiers) }))
     .filter(({ score }) => score > -Infinity)
     .sort((a, b) => b.score - a.score);
 
@@ -333,8 +345,11 @@ export function route(
   messages: Message[],
   modelOverride: string | undefined,
   opts: RouterOptions = {},
-): RoutingDecision {
+): RoutingDecision & { soulWarnings?: string[]; soulBlocked?: boolean; blockReason?: string } {
   const registry = loadRegistry();
+
+  // Load soul profile
+  const soul = opts.soul ?? loadSoul(opts.soulPath);
 
   // If explicit model requested (not "auto"), use it directly
   if (modelOverride && modelOverride !== 'auto') {
@@ -352,15 +367,58 @@ export function route(
   // Classify intent
   const intent: Intent = opts.intent ?? classifyIntent(messages);
 
-  // Select best model
-  const { model, fallbackChain } = selectModel(intent, opts);
+  // Estimate cost for soul evaluation (rough: 500 input + 200 output tokens)
+  const promptText = messages.map(m => m.content ?? '').join(' ');
+  const roughCost = estimateCost('deepseek/deepseek-chat', 500, 200); // base estimate
+
+  // Apply soul profile
+  const soulResult = applySoul(promptText, intent, soul, roughCost);
+
+  // Block if soul says no
+  if (!soulResult.allowed) {
+    return {
+      selected: registry.models[0], // placeholder
+      intent,
+      fallbackChain: [],
+      soulBlocked: true,
+      blockReason: soulResult.blockReason,
+      soulWarnings: soulResult.warnings,
+    };
+  }
+
+  // Use soul override if set
+  const effectiveOverride = soulResult.modelOverride;
+  if (effectiveOverride) {
+    const overrideModel = registry.models.find(m => m.id === effectiveOverride);
+    if (overrideModel) {
+      const cacheKey = opts.cache !== false
+        ? buildCacheKey(messages, effectiveOverride, 1.0)
+        : undefined;
+      return {
+        selected: overrideModel,
+        intent,
+        fallbackChain: [],
+        cacheKey,
+        soulWarnings: soulResult.warnings,
+      };
+    }
+  }
+
+  // Select best model with soul modifiers applied
+  const { model, fallbackChain } = selectModel(intent, opts, soulResult.scoreModifiers);
 
   // Build cache key
   const cacheKey = opts.cache !== false
     ? buildCacheKey(messages, model.id, 1.0)
     : undefined;
 
-  return { selected: model, intent, fallbackChain, cacheKey };
+  return {
+    selected: model,
+    intent,
+    fallbackChain,
+    cacheKey,
+    soulWarnings: soulResult.warnings.length > 0 ? soulResult.warnings : undefined,
+  };
 }
 
 // ─── Cost Estimation ─────────────────────────────────────────────────────────
