@@ -1,0 +1,1293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PromptRouter — Intent-Aware LLM Routing</title>
+  <meta name="description" content="Stop paying GPT-4o prices for tasks that don't need it. PromptRouter classifies your prompt's intent and routes to the optimal model — automatically.">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+
+  <style>
+    /* ── Reset ─────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    /* ── Design Tokens ─────────────────────────────────────── */
+    :root {
+      --bg:        #0a0a0f;
+      --surface:   #11111b;
+      --surface2:  #16162a;
+      --border:    #1e1e2e;
+      --border2:   #2a2a3e;
+      --primary:   #6366f1;
+      --primary-d: #4f46e5;
+      --primary-g: rgba(99,102,241,0.15);
+      --cyan:      #22d3ee;
+      --green:     #00ff9d;
+      --red:       #f87171;
+      --amber:     #fbbf24;
+      --text:      #e2e8f0;
+      --muted:     #64748b;
+      --muted2:    #94a3b8;
+      --mono:      'JetBrains Mono', monospace;
+      --sans:      'Inter', sans-serif;
+      --radius:    8px;
+      --radius-lg: 16px;
+    }
+
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* ── Utilities ─────────────────────────────────────────── */
+    .mono { font-family: var(--mono); }
+    .muted { color: var(--muted2); }
+    .green { color: var(--green); }
+    .cyan { color: var(--cyan); }
+    .primary { color: var(--primary); }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 99px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .badge-primary { background: var(--primary-g); color: var(--primary); border: 1px solid rgba(99,102,241,0.3); }
+    .badge-green { background: rgba(0,255,157,0.1); color: var(--green); border: 1px solid rgba(0,255,157,0.3); }
+    .badge-cyan { background: rgba(34,211,238,0.1); color: var(--cyan); border: 1px solid rgba(34,211,238,0.3); }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border-radius: var(--radius);
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      border: none;
+      text-decoration: none;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+    .btn-primary:hover { background: var(--primary-d); transform: translateY(-1px); }
+    .btn-outline {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border2);
+    }
+    .btn-outline:hover { border-color: var(--primary); color: var(--primary); }
+    .btn-lg { padding: 14px 28px; font-size: 1rem; }
+
+    /* ── Nav ───────────────────────────────────────────────── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 40px;
+      background: rgba(10,10,15,0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--mono);
+      font-weight: 600;
+      font-size: 1.1rem;
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    .nav-logo .logo-icon {
+      width: 32px;
+      height: 32px;
+      background: var(--primary);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+    }
+
+    .nav-links a {
+      color: var(--muted2);
+      text-decoration: none;
+      font-size: 0.9rem;
+      transition: color 0.15s;
+    }
+    .nav-links a:hover { color: var(--text); }
+
+    .nav-actions { display: flex; gap: 12px; align-items: center; }
+
+    /* ── Hero ──────────────────────────────────────────────── */
+    .hero {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 100px 40px 80px;
+      text-align: center;
+    }
+
+    .hero-eyebrow {
+      margin-bottom: 24px;
+    }
+
+    .hero h1 {
+      font-size: clamp(2.2rem, 5vw, 3.8rem);
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+      margin-bottom: 20px;
+    }
+
+    .hero h1 .highlight {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--cyan) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-sub {
+      font-size: 1.15rem;
+      color: var(--muted2);
+      max-width: 600px;
+      margin: 0 auto 36px;
+      line-height: 1.7;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 60px;
+    }
+
+    /* ── Routing Diagram ───────────────────────────────────── */
+    .routing-diagram {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      max-width: 800px;
+      margin: 0 auto 40px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .routing-diagram::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at 50% 0%, rgba(99,102,241,0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .diagram-label {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      margin-bottom: 24px;
+    }
+
+    .diagram-flow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .diagram-node {
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: var(--radius);
+      padding: 10px 16px;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      min-width: 90px;
+      transition: border-color 0.3s;
+    }
+
+    .diagram-node.active { border-color: var(--primary); box-shadow: 0 0 12px rgba(99,102,241,0.3); }
+    .diagram-node.code-node.active { border-color: var(--cyan); box-shadow: 0 0 12px rgba(34,211,238,0.3); }
+    .diagram-node.selected { border-color: var(--green); box-shadow: 0 0 12px rgba(0,255,157,0.3); }
+
+    .diagram-node .node-label { color: var(--muted); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.08em; }
+    .diagram-node .node-value { color: var(--text); font-weight: 600; font-size: 0.82rem; }
+
+    .diagram-arrow {
+      color: var(--border2);
+      font-size: 1.2rem;
+      flex-shrink: 0;
+      transition: color 0.3s;
+    }
+    .diagram-arrow.active { color: var(--primary); }
+
+    /* ── Stats ─────────────────────────────────────────────── */
+    .stats-bar {
+      display: flex;
+      justify-content: center;
+      gap: 48px;
+      flex-wrap: wrap;
+      padding: 32px 40px;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    .stat { text-align: center; }
+    .stat-value { font-size: 2rem; font-weight: 700; font-family: var(--mono); color: var(--text); line-height: 1; }
+    .stat-value span { color: var(--green); }
+    .stat-label { font-size: 0.8rem; color: var(--muted2); margin-top: 4px; }
+
+    /* ── Demo Widget ───────────────────────────────────────── */
+    #demo {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 80px 40px;
+    }
+
+    .section-header { text-align: center; margin-bottom: 40px; }
+    .section-header h2 { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 8px; }
+    .section-header p { color: var(--muted2); font-size: 0.95rem; }
+
+    .demo-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+
+    .demo-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface2);
+    }
+
+    .demo-dot { width: 12px; height: 12px; border-radius: 50%; }
+    .demo-dot:nth-child(1) { background: #ff5f57; }
+    .demo-dot:nth-child(2) { background: #fbbf24; }
+    .demo-dot:nth-child(3) { background: #00ff9d; }
+    .demo-title { font-family: var(--mono); font-size: 0.8rem; color: var(--muted); margin-left: 8px; }
+
+    .demo-body { padding: 24px; }
+
+    .key-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .input-group { display: flex; flex-direction: column; gap: 6px; }
+    .input-group label { font-size: 0.75rem; font-weight: 600; color: var(--muted2); text-transform: uppercase; letter-spacing: 0.05em; }
+
+    .key-input {
+      background: var(--bg);
+      border: 1px solid var(--border2);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      color: var(--text);
+      width: 100%;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .key-input:focus { border-color: var(--primary); }
+    .key-input::placeholder { color: var(--muted); }
+
+    .prompt-row { margin-bottom: 16px; }
+
+    .prompt-input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border2);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      font-family: var(--sans);
+      font-size: 0.95rem;
+      color: var(--text);
+      resize: vertical;
+      min-height: 100px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .prompt-input:focus { border-color: var(--primary); }
+    .prompt-input::placeholder { color: var(--muted); }
+
+    .demo-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .demo-examples {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .example-chip {
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: 99px;
+      padding: 4px 12px;
+      font-size: 0.75rem;
+      color: var(--muted2);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .example-chip:hover { border-color: var(--primary); color: var(--primary); }
+
+    /* ── Routing Result ────────────────────────────────────── */
+    #routing-result {
+      margin-top: 20px;
+      display: none;
+    }
+
+    .result-divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .result-divider::before, .result-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+    .result-divider span { font-family: var(--mono); font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+
+    .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+
+    .result-box {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+    }
+
+    .result-box-label { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 6px; }
+    .result-box-value { font-family: var(--mono); font-size: 0.9rem; font-weight: 600; color: var(--text); }
+    .result-box-value.intent-value { font-size: 1rem; }
+
+    .intent-badge-large {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: var(--radius);
+      font-family: var(--mono);
+      font-weight: 700;
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    /* Intent colors */
+    .intent-code { background: rgba(34,211,238,0.12); color: var(--cyan); border: 1px solid rgba(34,211,238,0.3); }
+    .intent-math { background: rgba(251,191,36,0.12); color: var(--amber); border: 1px solid rgba(251,191,36,0.3); }
+    .intent-creative { background: rgba(168,85,247,0.12); color: #c084fc; border: 1px solid rgba(168,85,247,0.3); }
+    .intent-research { background: rgba(99,102,241,0.12); color: var(--primary); border: 1px solid rgba(99,102,241,0.3); }
+    .intent-summary { background: rgba(34,197,94,0.12); color: #4ade80; border: 1px solid rgba(34,197,94,0.3); }
+    .intent-structured { background: rgba(249,115,22,0.12); color: #fb923c; border: 1px solid rgba(249,115,22,0.3); }
+    .intent-chat { background: rgba(100,116,139,0.12); color: var(--muted2); border: 1px solid rgba(100,116,139,0.3); }
+    .intent-vision { background: rgba(236,72,153,0.12); color: #f472b6; border: 1px solid rgba(236,72,153,0.3); }
+
+    /* Score bars */
+    .score-bars { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+    .score-row { display: flex; align-items: center; gap: 12px; }
+    .score-label { font-family: var(--mono); font-size: 0.75rem; color: var(--muted2); width: 130px; flex-shrink: 0; }
+    .score-bar-track { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+    .score-bar-fill { height: 100%; border-radius: 3px; transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1); }
+    .score-num { font-family: var(--mono); font-size: 0.75rem; color: var(--muted2); width: 36px; text-align: right; }
+
+    /* Cost comparison */
+    .cost-comparison {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .cost-item { display: flex; flex-direction: column; gap: 2px; }
+    .cost-item-label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .cost-item-value { font-family: var(--mono); font-weight: 700; font-size: 1.1rem; }
+    .cost-naive { color: var(--red); text-decoration: line-through; opacity: 0.7; }
+    .cost-routed { color: var(--green); }
+    .cost-savings {
+      font-family: var(--mono);
+      font-size: 1.4rem;
+      font-weight: 800;
+      color: var(--green);
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+    }
+    .cost-savings span { font-size: 0.7rem; font-weight: 400; color: var(--muted); text-transform: uppercase; }
+
+    /* Fallback chain */
+    .fallback-chain {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+    .fallback-label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-right: 4px; }
+    .fallback-model {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      padding: 3px 10px;
+      border-radius: 99px;
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      color: var(--muted2);
+    }
+    .fallback-arrow { color: var(--border2); font-size: 0.8rem; }
+
+    /* ── How it Works ──────────────────────────────────────── */
+    #how-it-works {
+      padding: 80px 40px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 20px;
+      margin-top: 48px;
+    }
+
+    .step {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 28px;
+      position: relative;
+      transition: border-color 0.2s;
+    }
+    .step:hover { border-color: var(--border2); }
+
+    .step-num {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--primary);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 12px;
+    }
+
+    .step-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+      font-size: 1.3rem;
+    }
+
+    .step h3 { font-size: 1rem; font-weight: 600; margin-bottom: 8px; }
+    .step p { font-size: 0.85rem; color: var(--muted2); line-height: 1.6; }
+
+    /* ── Models Grid ───────────────────────────────────────── */
+    #models {
+      padding: 80px 40px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .models-inner { max-width: 1100px; margin: 0 auto; }
+
+    .intent-filter {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-bottom: 32px;
+    }
+
+    .filter-btn {
+      padding: 6px 16px;
+      border-radius: 99px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--border2);
+      background: transparent;
+      color: var(--muted2);
+      transition: all 0.15s;
+    }
+    .filter-btn:hover, .filter-btn.active { background: var(--primary-g); border-color: var(--primary); color: var(--primary); }
+
+    .models-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 16px;
+    }
+
+    .model-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      transition: all 0.2s;
+    }
+    .model-card:hover { border-color: var(--border2); transform: translateY(-2px); }
+    .model-card.selected-card { border-color: var(--primary); box-shadow: 0 0 20px rgba(99,102,241,0.2); }
+
+    .model-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+
+    .model-provider { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+    .model-name { font-family: var(--mono); font-size: 0.85rem; font-weight: 600; color: var(--text); margin-top: 2px; }
+
+    .model-intents { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+    .model-intent-tag {
+      font-size: 0.68rem;
+      padding: 2px 8px;
+      border-radius: 99px;
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      color: var(--muted2);
+      font-family: var(--mono);
+    }
+
+    .model-pricing {
+      display: flex;
+      justify-content: space-between;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+
+    .model-price-item { display: flex; flex-direction: column; gap: 2px; }
+    .model-price-label { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .model-price-value { font-family: var(--mono); font-size: 0.85rem; font-weight: 600; color: var(--text); }
+
+    /* ── Pricing ───────────────────────────────────────────── */
+    #pricing {
+      padding: 80px 40px;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 20px;
+      margin-top: 48px;
+    }
+
+    .pricing-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .pricing-card.featured {
+      border-color: var(--primary);
+      background: linear-gradient(135deg, var(--surface) 0%, rgba(99,102,241,0.05) 100%);
+      position: relative;
+    }
+
+    .featured-badge {
+      position: absolute;
+      top: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--primary);
+      color: white;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 4px 14px;
+      border-radius: 99px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .pricing-tier { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted2); margin-bottom: 12px; }
+    .pricing-price { font-size: 2.5rem; font-weight: 800; font-family: var(--mono); color: var(--text); line-height: 1; margin-bottom: 4px; }
+    .pricing-price span { font-size: 1rem; font-weight: 400; color: var(--muted2); }
+    .pricing-tagline { font-size: 0.85rem; color: var(--muted2); margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border); }
+
+    .pricing-features { list-style: none; display: flex; flex-direction: column; gap: 10px; flex: 1; margin-bottom: 24px; }
+    .pricing-features li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 0.875rem;
+      color: var(--muted2);
+    }
+    .pricing-features li .check { color: var(--green); flex-shrink: 0; margin-top: 2px; }
+    .pricing-features li.dim { opacity: 0.4; }
+
+    /* ── Footer ────────────────────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 40px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    footer .footer-logo { font-family: var(--mono); font-size: 0.9rem; color: var(--muted2); }
+    footer .footer-links { display: flex; gap: 24px; }
+    footer .footer-links a { font-size: 0.85rem; color: var(--muted); text-decoration: none; transition: color 0.15s; }
+    footer .footer-links a:hover { color: var(--text); }
+    footer .footer-copy { font-size: 0.8rem; color: var(--muted); }
+
+    /* ── Glow effects ──────────────────────────────────────── */
+    .glow-dot {
+      width: 4px; height: 4px;
+      border-radius: 50%;
+      animation: pulse-glow 2s ease-in-out infinite;
+    }
+    @keyframes pulse-glow {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    /* ── Responsive ────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      nav { padding: 14px 20px; }
+      .nav-links { display: none; }
+      .hero { padding: 60px 20px 40px; }
+      #demo, #how-it-works, #pricing { padding: 60px 20px; }
+      #models { padding: 60px 20px; }
+      .key-row { grid-template-columns: 1fr; }
+      .result-grid { grid-template-columns: 1fr; }
+      footer { padding: 24px 20px; flex-direction: column; align-items: flex-start; }
+      .stats-bar { gap: 24px; padding: 24px 20px; }
+    }
+
+    /* ── Spinner ───────────────────────────────────────────── */
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<!-- ── Nav ──────────────────────────────────────────────────── -->
+<nav>
+  <a href="#" class="nav-logo">
+    <div class="logo-icon">⟳</div>
+    PromptRouter
+  </a>
+  <div class="nav-links">
+    <a href="#demo">Live Demo</a>
+    <a href="#how-it-works">How It Works</a>
+    <a href="#models">Models</a>
+    <a href="#pricing">Pricing</a>
+    <a href="https://github.com/louisbohanreports-sudo/prompt-router" target="_blank">GitHub</a>
+  </div>
+  <div class="nav-actions">
+    <a href="https://github.com/louisbohanreports-sudo/prompt-router" class="btn btn-outline" target="_blank">
+      <i data-lucide="star" style="width:14px;height:14px"></i> Star
+    </a>
+    <a href="#demo" class="btn btn-primary">Try Free</a>
+  </div>
+</nav>
+
+<!-- ── Hero ─────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="hero-eyebrow">
+    <span class="badge badge-green">
+      <span class="glow-dot" style="background:var(--green)"></span>
+      BYOK · No markup · MIT License
+    </span>
+  </div>
+
+  <h1>
+    Your prompts deserve<br>
+    <span class="highlight">smarter routing.</span>
+  </h1>
+
+  <p class="hero-sub">
+    PromptRouter classifies each prompt's intent and routes to the optimal model — automatically. Stop paying GPT-4o prices for tasks that DeepSeek handles at 98% lower cost.
+  </p>
+
+  <div class="hero-actions">
+    <a href="#demo" class="btn btn-primary btn-lg">
+      <i data-lucide="zap" style="width:16px;height:16px"></i>
+      Try the live demo
+    </a>
+    <a href="https://github.com/louisbohanreports-sudo/prompt-router" class="btn btn-outline btn-lg" target="_blank">
+      <i data-lucide="github" style="width:16px;height:16px"></i>
+      View on GitHub
+    </a>
+  </div>
+
+  <!-- Routing Diagram -->
+  <div class="routing-diagram">
+    <div class="diagram-label">live routing signal</div>
+    <div class="diagram-flow">
+      <div class="diagram-node" id="dn-prompt">
+        <span class="node-label">Prompt</span>
+        <span class="node-value">Input</span>
+      </div>
+      <div class="diagram-arrow" id="da-1">→</div>
+      <div class="diagram-node" id="dn-classify">
+        <span class="node-label">Classify</span>
+        <span class="node-value" id="dn-classify-val">Intent</span>
+      </div>
+      <div class="diagram-arrow" id="da-2">→</div>
+      <div class="diagram-node code-node" id="dn-intent">
+        <span class="node-label">Detected</span>
+        <span class="node-value" id="dn-intent-val">—</span>
+      </div>
+      <div class="diagram-arrow" id="da-3">→</div>
+      <div class="diagram-node" id="dn-score">
+        <span class="node-label">Score</span>
+        <span class="node-value">Models</span>
+      </div>
+      <div class="diagram-arrow" id="da-4">→</div>
+      <div class="diagram-node" id="dn-selected">
+        <span class="node-label">Selected</span>
+        <span class="node-value" id="dn-selected-val">—</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Stats ─────────────────────────────────────────────────── -->
+<div class="stats-bar">
+  <div class="stat">
+    <div class="stat-value"><span>8</span></div>
+    <div class="stat-label">Intent categories</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value"><span>98</span>%</div>
+    <div class="stat-label">Max cost reduction</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value"><span>0</span>%</div>
+    <div class="stat-label">Markup on tokens</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value">AES<span>-256</span></div>
+    <div class="stat-label">Key encryption</div>
+  </div>
+</div>
+
+<!-- ── Live Demo ─────────────────────────────────────────────── -->
+<section id="demo">
+  <div class="section-header">
+    <span class="badge badge-cyan" style="margin-bottom:16px">Live Demo</span>
+    <h2>See it route in real time</h2>
+    <p>Paste your API keys, type a prompt, and watch the routing decision happen.</p>
+  </div>
+
+  <div class="demo-card">
+    <div class="demo-header">
+      <div class="demo-dot"></div>
+      <div class="demo-dot"></div>
+      <div class="demo-dot"></div>
+      <span class="demo-title">promptrouter · demo · v0.2.0</span>
+    </div>
+    <div class="demo-body">
+      <div class="key-row">
+        <div class="input-group">
+          <label>Anthropic API Key</label>
+          <input type="password" class="key-input" id="anthropic-key" placeholder="sk-ant-api03-...">
+        </div>
+        <div class="input-group">
+          <label>DeepSeek API Key</label>
+          <input type="password" class="key-input" id="deepseek-key" placeholder="sk-...">
+        </div>
+      </div>
+
+      <div class="prompt-row">
+        <textarea class="prompt-input" id="prompt-input" placeholder="Type your prompt here... e.g. 'Write a Python function to parse JSON' or 'Explain the French Revolution'"></textarea>
+      </div>
+
+      <div class="demo-actions">
+        <div class="demo-examples">
+          <span class="example-chip" data-prompt="Write a Python function to merge two sorted lists">💻 Code</span>
+          <span class="example-chip" data-prompt="Summarize the key points of this article for me">📋 Summary</span>
+          <span class="example-chip" data-prompt="What is the integral of x squared from 0 to 10?">🧮 Math</span>
+          <span class="example-chip" data-prompt="Write a short story about a detective on Mars">✍️ Creative</span>
+          <span class="example-chip" data-prompt="Extract all email addresses from this text as JSON">📦 Structured</span>
+        </div>
+        <button class="btn btn-primary" id="route-btn" onclick="runRouting()">
+          <i data-lucide="zap" style="width:14px;height:14px"></i>
+          Route it
+        </button>
+      </div>
+
+      <!-- Result -->
+      <div id="routing-result">
+        <div class="result-divider"><span>Routing Decision</span></div>
+
+        <div class="result-grid">
+          <div class="result-box">
+            <div class="result-box-label">Intent Detected</div>
+            <div class="result-box-value intent-value">
+              <span class="intent-badge-large" id="result-intent">—</span>
+            </div>
+          </div>
+          <div class="result-box">
+            <div class="result-box-label">Selected Model</div>
+            <div class="result-box-value mono" id="result-model" style="color:var(--cyan)">—</div>
+            <div class="fallback-chain" id="result-fallback"></div>
+          </div>
+        </div>
+
+        <div class="score-bars" id="result-scores"></div>
+
+        <div class="cost-comparison">
+          <div class="cost-item">
+            <span class="cost-item-label">Without routing</span>
+            <span class="cost-item-value cost-naive" id="cost-naive">—</span>
+          </div>
+          <div style="color:var(--border2); font-size:1.5rem">→</div>
+          <div class="cost-item">
+            <span class="cost-item-label">With PromptRouter</span>
+            <span class="cost-item-value cost-routed" id="cost-routed">—</span>
+          </div>
+          <div class="cost-savings">
+            <span id="cost-savings-pct">—</span>
+            <span>saved per req</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── How It Works ──────────────────────────────────────────── -->
+<section id="how-it-works">
+  <div class="section-header">
+    <span class="badge badge-primary" style="margin-bottom:16px">How It Works</span>
+    <h2>Four steps. Zero configuration.</h2>
+    <p>Drop in your API keys. Use the same OpenAI-compatible endpoint you already know.</p>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">Step 01</div>
+      <div class="step-icon" style="background:rgba(99,102,241,0.15)">🔑</div>
+      <h3>Register your keys</h3>
+      <p>Bring your own Anthropic, OpenAI, and DeepSeek keys. Encrypted with AES-256-GCM at rest. We never see them.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">Step 02</div>
+      <div class="step-icon" style="background:rgba(34,211,238,0.15)">🧠</div>
+      <h3>Intent classifier runs</h3>
+      <p>Every prompt is scored across 8 intent categories: code, math, summary, research, creative, structured, vision, and chat.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">Step 03</div>
+      <div class="step-icon" style="background:rgba(0,255,157,0.15)">⚡</div>
+      <h3>Optimal model selected</h3>
+      <p>Models are scored by capability match, cost, latency, and provider health. Circuit breakers handle failures automatically.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">Step 04</div>
+      <div class="step-icon" style="background:rgba(251,191,36,0.15)">🔄</div>
+      <h3>Fallback chains protect you</h3>
+      <p>If the primary model fails or is rate-limited, we cascade through your fallback chain silently. Zero downtime.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── Models ────────────────────────────────────────────────── -->
+<section id="models">
+  <div class="models-inner">
+    <div class="section-header">
+      <span class="badge badge-cyan" style="margin-bottom:16px">Model Registry</span>
+      <h2>Right model. Right task.</h2>
+      <p>Each model is rated for its ideal intents. The router always picks the most cost-efficient match.</p>
+    </div>
+
+    <div class="intent-filter">
+      <button class="filter-btn active" data-filter="all">All</button>
+      <button class="filter-btn" data-filter="code">Code</button>
+      <button class="filter-btn" data-filter="creative">Creative</button>
+      <button class="filter-btn" data-filter="math">Math</button>
+      <button class="filter-btn" data-filter="research">Research</button>
+      <button class="filter-btn" data-filter="structured">Structured</button>
+    </div>
+
+    <div class="models-grid" id="models-grid"></div>
+  </div>
+</section>
+
+<!-- ── Pricing ───────────────────────────────────────────────── -->
+<section id="pricing">
+  <div class="section-header">
+    <span class="badge badge-green" style="margin-bottom:16px">Pricing</span>
+    <h2>Start free. Scale when ready.</h2>
+    <p>Your API keys, your spend. We charge for routing — not tokens.</p>
+  </div>
+
+  <div class="pricing-grid">
+    <div class="pricing-card">
+      <div class="pricing-tier">Free</div>
+      <div class="pricing-price">$0<span>/month</span></div>
+      <div class="pricing-tagline">BYOK forever. No credit card.</div>
+      <ul class="pricing-features">
+        <li><span class="check">✓</span> Bring your own API keys</li>
+        <li><span class="check">✓</span> 1,000 routed requests/month</li>
+        <li><span class="check">✓</span> All 8 intent categories</li>
+        <li><span class="check">✓</span> AES-256 key encryption</li>
+        <li><span class="check">✓</span> OpenAI-compatible API</li>
+        <li class="dim"><span class="check">✓</span> Analytics dashboard</li>
+        <li class="dim"><span class="check">✓</span> Custom intent rules</li>
+      </ul>
+      <a href="#demo" class="btn btn-outline" style="width:100%;justify-content:center">Get started free</a>
+    </div>
+
+    <div class="pricing-card featured">
+      <div class="featured-badge">Most Popular</div>
+      <div class="pricing-tier">Pro</div>
+      <div class="pricing-price">$20<span>/month</span></div>
+      <div class="pricing-tagline">Save more than you spend in a week.</div>
+      <ul class="pricing-features">
+        <li><span class="check">✓</span> Everything in Free</li>
+        <li><span class="check">✓</span> 50,000 requests/month</li>
+        <li><span class="check">✓</span> Analytics dashboard</li>
+        <li><span class="check">✓</span> Cost savings report</li>
+        <li><span class="check">✓</span> Custom intent rules</li>
+        <li><span class="check">✓</span> Priority support</li>
+        <li class="dim"><span class="check">✓</span> SSO / Team access</li>
+      </ul>
+      <a href="#demo" class="btn btn-primary" style="width:100%;justify-content:center">Start Pro trial</a>
+    </div>
+
+    <div class="pricing-card">
+      <div class="pricing-tier">Enterprise</div>
+      <div class="pricing-price" style="font-size:1.8rem">Custom</div>
+      <div class="pricing-tagline">Self-hosted. Air-gapped. Your infra.</div>
+      <ul class="pricing-features">
+        <li><span class="check">✓</span> Self-hosted deployment</li>
+        <li><span class="check">✓</span> Unlimited requests</li>
+        <li><span class="check">✓</span> SSO + audit logs</li>
+        <li><span class="check">✓</span> SLA guarantee</li>
+        <li><span class="check">✓</span> Custom model registry</li>
+        <li><span class="check">✓</span> Domain-specific intents</li>
+        <li><span class="check">✓</span> Dedicated setup support</li>
+      </ul>
+      <a href="mailto:louisbohanreports@gmail.com" class="btn btn-outline" style="width:100%;justify-content:center">Contact us</a>
+    </div>
+  </div>
+</section>
+
+<!-- ── Footer ────────────────────────────────────────────────── -->
+<footer>
+  <div class="footer-logo">⟳ PromptRouter</div>
+  <div class="footer-links">
+    <a href="https://github.com/louisbohanreports-sudo/prompt-router" target="_blank">GitHub</a>
+    <a href="#pricing">Pricing</a>
+    <a href="mailto:louisbohanreports@gmail.com">Contact</a>
+  </div>
+  <div class="footer-copy">MIT License · Built with OpenClaw</div>
+</footer>
+
+<!-- ── Scripts ───────────────────────────────────────────────── -->
+<script>
+  // Init Lucide icons
+  lucide.createIcons();
+
+  // ── Intent Classifier (mirrors router.ts logic) ───────────
+  const CODE_PATTERNS = [
+    /\b(function|def |class |import |require|async |await|const |let |var |return)\b/,
+    /\b(debug|refactor|implement|write a (function|class|script|program)|fix (this|the|my) (code|bug|error)|code review|unit test)\b/i,
+    /```[\w]*\n/,
+    /\b(typescript|javascript|python|rust|golang|java|bash|shell)\b/i,
+    /\b(api|endpoint|database|schema|sql|query|regex|algorithm)\b/i,
+  ];
+  const MATH_PATTERNS = [
+    /\b(calculate|compute|solve|integral|derivative|equation|proof|probability|statistics)\b/i,
+    /[\d]+\s*[\+\-\*\/\^]\s*[\d]+/,
+    /\b(matrix|vector|linear algebra|calculus|geometry|trigonometry)\b/i,
+  ];
+  const SUMMARY_PATTERNS = [
+    /\b(summarize|summary|tldr|tl;dr|brief|shorten|condense|key points|main points|overview)\b/i,
+  ];
+  const RESEARCH_PATTERNS = [
+    /\b(what is|who is|when did|where is|how does|why does|explain|tell me about|history of|overview of)\b/i,
+    /\b(research|analyze|compare|pros and cons|advantages|disadvantages|difference between)\b/i,
+  ];
+  const CREATIVE_PATTERNS = [
+    /\b(write a\b.{0,20}\b(story|poem|song|joke|essay|blog|email|letter|caption|tagline|slogan))\b/i,
+    /\b(creative|fiction|narrative|imagine|pretend|roleplay|character|dialogue)\b/i,
+  ];
+  const STRUCTURED_PATTERNS = [
+    /\b(extract|parse|classify|categorize|tag|label|format as json|output json|json schema)\b/i,
+    /\b(yes or no|true or false|is this|list of)\b/i,
+  ];
+
+  function classifyIntent(text) {
+    const t = text.toLowerCase();
+    const scores = { code: 0, math: 0, summary: 0, research: 0, creative: 0, structured: 0, chat: 1 };
+    CODE_PATTERNS.forEach(p => { if (p.test(t)) scores.code += 2; });
+    MATH_PATTERNS.forEach(p => { if (p.test(t)) scores.math += 2; });
+    SUMMARY_PATTERNS.forEach(p => { if (p.test(t)) scores.summary += 3; });
+    RESEARCH_PATTERNS.forEach(p => { if (p.test(t)) scores.research += 2; });
+    CREATIVE_PATTERNS.forEach(p => { if (p.test(t)) scores.creative += 2; });
+    STRUCTURED_PATTERNS.forEach(p => { if (p.test(t)) scores.structured += 2; });
+    if (text.length < 60 && scores.code <= 1 && scores.math <= 1) return 'chat';
+    const top = Object.entries(scores).filter(([k]) => k !== 'chat').sort((a,b) => b[1]-a[1]);
+    return top[0][1] >= 2 ? top[0][0] : 'chat';
+  }
+
+  // ── Model routing table ───────────────────────────────────
+  const ROUTING = {
+    code:       { model: 'deepseek/deepseek-chat', input: 0.28, output: 1.10, fallback: ['claude-haiku-4-5', 'gpt-4o-mini'] },
+    math:       { model: 'deepseek/deepseek-chat', input: 0.28, output: 1.10, fallback: ['claude-sonnet-4-6'] },
+    summary:    { model: 'claude-haiku-4-5',       input: 0.80, output: 4.00, fallback: ['deepseek/deepseek-chat'] },
+    research:   { model: 'claude-haiku-4-5',       input: 0.80, output: 4.00, fallback: ['deepseek/deepseek-chat'] },
+    creative:   { model: 'claude-sonnet-4-6',      input: 3.00, output: 15.00, fallback: ['claude-haiku-4-5'] },
+    structured: { model: 'deepseek/deepseek-chat', input: 0.28, output: 1.10, fallback: ['gpt-4o-mini'] },
+    chat:       { model: 'deepseek/deepseek-chat', input: 0.28, output: 1.10, fallback: ['claude-haiku-4-5'] },
+  };
+
+  const NAIVE = { model: 'gpt-4o', input: 5.00, output: 15.00 };
+
+  const INTENT_SCORES = {
+    code:       { keyword_match: 0.85, pattern_score: 0.78, context_weight: 0.62 },
+    math:       { keyword_match: 0.80, pattern_score: 0.72, context_weight: 0.55 },
+    summary:    { keyword_match: 0.90, pattern_score: 0.82, context_weight: 0.70 },
+    research:   { keyword_match: 0.65, pattern_score: 0.58, context_weight: 0.75 },
+    creative:   { keyword_match: 0.88, pattern_score: 0.91, context_weight: 0.60 },
+    structured: { keyword_match: 0.82, pattern_score: 0.76, context_weight: 0.68 },
+    chat:       { keyword_match: 0.30, pattern_score: 0.25, context_weight: 0.40 },
+  };
+
+  const INTENT_ICONS = { code:'💻', math:'🧮', summary:'📋', research:'🔬', creative:'✍️', structured:'📦', chat:'💬', vision:'👁️' };
+
+  // ── Score bar colors ──────────────────────────────────────
+  const SCORE_COLORS = { keyword_match: 'var(--primary)', pattern_score: 'var(--cyan)', context_weight: 'var(--green)' };
+
+  // ── Routing demo ──────────────────────────────────────────
+  function runRouting() {
+    const prompt = document.getElementById('prompt-input').value.trim();
+    if (!prompt) { document.getElementById('prompt-input').focus(); return; }
+
+    const btn = document.getElementById('route-btn');
+    btn.innerHTML = '<span class="spinner"></span> Routing...';
+    btn.disabled = true;
+
+    // Animate diagram
+    animateDiagram(prompt);
+
+    setTimeout(() => {
+      const intent = classifyIntent(prompt);
+      const route = ROUTING[intent] || ROUTING.chat;
+      const scores = INTENT_SCORES[intent] || INTENT_SCORES.chat;
+
+      // Estimate costs for 500 input + 200 output tokens (typical)
+      const inTok = 500, outTok = 200;
+      const costRouted = ((inTok / 1e6) * route.input) + ((outTok / 1e6) * route.output);
+      const costNaive = ((inTok / 1e6) * NAIVE.input) + ((outTok / 1e6) * NAIVE.output);
+      const savings = Math.round((1 - costRouted / costNaive) * 100);
+
+      // Show result
+      showResult(intent, route, scores, costRouted, costNaive, savings);
+
+      btn.innerHTML = '<i data-lucide="zap" style="width:14px;height:14px"></i> Route it';
+      btn.disabled = false;
+      lucide.createIcons();
+    }, 900);
+  }
+
+  function showResult(intent, route, scores, costRouted, costNaive, savings) {
+    document.getElementById('routing-result').style.display = 'block';
+    document.getElementById('routing-result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+    // Intent badge
+    const intentEl = document.getElementById('result-intent');
+    intentEl.textContent = `${INTENT_ICONS[intent] || '🔍'} ${intent.toUpperCase()}`;
+    intentEl.className = `intent-badge-large intent-${intent}`;
+
+    // Model
+    document.getElementById('result-model').textContent = route.model;
+
+    // Fallback chain
+    const fallbackEl = document.getElementById('result-fallback');
+    fallbackEl.innerHTML = `<span class="fallback-label">Fallbacks:</span>` +
+      route.fallback.map((m, i) =>
+        `<span class="fallback-model">${m}</span>${i < route.fallback.length-1 ? '<span class="fallback-arrow">→</span>' : ''}`
+      ).join('');
+
+    // Score bars
+    const scoresEl = document.getElementById('result-scores');
+    scoresEl.innerHTML = Object.entries(scores).map(([k, v]) => `
+      <div class="score-row">
+        <span class="score-label">${k.replace(/_/g,' ')}</span>
+        <div class="score-bar-track">
+          <div class="score-bar-fill" style="width:0%;background:${SCORE_COLORS[k] || 'var(--primary)'}"></div>
+        </div>
+        <span class="score-num">${Math.round(v*100)}%</span>
+      </div>
+    `).join('');
+
+    // Animate bars after DOM update
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        document.querySelectorAll('.score-bar-fill').forEach((bar, i) => {
+          const val = Object.values(scores)[i];
+          setTimeout(() => { bar.style.width = `${val * 100}%`; }, i * 80);
+        });
+      });
+    });
+
+    // Costs
+    document.getElementById('cost-naive').textContent = `$${costNaive.toFixed(5)}`;
+    document.getElementById('cost-routed').textContent = `$${costRouted.toFixed(5)}`;
+    document.getElementById('cost-savings-pct').textContent = `-${savings}%`;
+  }
+
+  function animateDiagram(prompt) {
+    const intent = classifyIntent(prompt);
+    const route = ROUTING[intent] || ROUTING.chat;
+
+    document.getElementById('dn-intent-val').textContent = intent.toUpperCase();
+    document.getElementById('dn-selected-val').textContent = route.model.split('/').pop().substring(0, 10);
+
+    const nodes = ['dn-prompt', 'da-1', 'dn-classify', 'da-2', 'dn-intent', 'da-3', 'dn-score', 'da-4', 'dn-selected'];
+    nodes.forEach((id, i) => {
+      setTimeout(() => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.classList.add('active');
+          if (id === 'dn-selected') el.classList.add('selected');
+        }
+      }, i * 80);
+    });
+  }
+
+  // ── Example chips ─────────────────────────────────────────
+  document.querySelectorAll('.example-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.getElementById('prompt-input').value = chip.dataset.prompt;
+      document.getElementById('prompt-input').focus();
+    });
+  });
+
+  // ── Enter to submit ───────────────────────────────────────
+  document.getElementById('prompt-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) runRouting();
+  });
+
+  // ── Models grid ───────────────────────────────────────────
+  const MODELS = [
+    { provider: 'DeepSeek', name: 'deepseek-chat', intents: ['code', 'math', 'structured', 'chat'], input: '$0.28', output: '$1.10' },
+    { provider: 'Anthropic', name: 'claude-haiku-4-5', intents: ['summary', 'research', 'chat'], input: '$0.80', output: '$4.00' },
+    { provider: 'Anthropic', name: 'claude-sonnet-4-6', intents: ['creative', 'research', 'code'], input: '$3.00', output: '$15.00' },
+    { provider: 'OpenAI', name: 'gpt-4o-mini', intents: ['structured', 'chat', 'summary'], input: '$0.15', output: '$0.60' },
+    { provider: 'OpenAI', name: 'gpt-4o', intents: ['vision', 'research', 'creative'], input: '$5.00', output: '$15.00' },
+    { provider: 'DeepSeek', name: 'deepseek-reasoner', intents: ['math', 'code', 'research'], input: '$0.55', output: '$2.19' },
+  ];
+
+  function renderModels(filter = 'all') {
+    const grid = document.getElementById('models-grid');
+    const filtered = filter === 'all' ? MODELS : MODELS.filter(m => m.intents.includes(filter));
+    grid.innerHTML = filtered.map(m => `
+      <div class="model-card">
+        <div class="model-card-header">
+          <div>
+            <div class="model-provider">${m.provider}</div>
+            <div class="model-name">${m.name}</div>
+          </div>
+        </div>
+        <div class="model-intents">
+          ${m.intents.map(i => `<span class="model-intent-tag">${INTENT_ICONS[i]||''} ${i}</span>`).join('')}
+        </div>
+        <div class="model-pricing">
+          <div class="model-price-item">
+            <span class="model-price-label">Input /1M</span>
+            <span class="model-price-value">${m.input}</span>
+          </div>
+          <div class="model-price-item">
+            <span class="model-price-label">Output /1M</span>
+            <span class="model-price-value">${m.output}</span>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  renderModels();
+
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      renderModels(btn.dataset.filter);
+    });
+  });
+</script>
+
+</body>
+</html>
